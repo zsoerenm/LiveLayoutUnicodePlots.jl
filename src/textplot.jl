@@ -259,3 +259,13 @@ function Base.show(io::IO, ::MIME"text/plain", tp::TextPlot)
     # Output
     print(io, join(bordered_lines, '\n'))
 end
+
+"""
+    Base.show(io::IO, tp::TextPlot)
+
+Render the TextPlot to a string for display (fallback for string()).
+"""
+function Base.show(io::IO, tp::TextPlot)
+    # Use the same rendering as MIME"text/plain"
+    show(io, MIME("text/plain"), tp)
+end
