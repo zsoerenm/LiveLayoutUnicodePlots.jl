@@ -2,6 +2,8 @@
 
 A Julia package for creating live/animated terminal plots and flexible plot layouts with [UnicodePlots.jl](https://github.com/JuliaPlots/UnicodePlots.jl).
 
+[![asciicast](https://asciinema.org/a/gaDph4q0WJ9oyEpcv5YVqDNSm.svg)](https://asciinema.org/a/gaDph4q0WJ9oyEpcv5YVqDNSm)
+
 ## Features
 
 - **Live/Animated Plots**: Update plots in-place for smooth terminal animations
@@ -27,8 +29,8 @@ using UnicodePlots
 x = range(0, 2π, length=30)
 
 @layout [
-    lineplot(x, sin.(x); title="sin(x)"), # equivalent to width=:auto, height=:auto
-    lineplot(x, cos.(x); title="cos(x)") # equivalent to width=:auto height=:auto
+    lineplot(x, sin.(x); title="sin(x)"), # equivalent to width=:auto
+    lineplot(x, cos.(x); title="cos(x)") # equivalent to width=:auto
 ]
 ```
 
@@ -36,31 +38,32 @@ x = range(0, 2π, length=30)
 
 ```julia
 @layout [
-    [lineplot(x, sin.(x); title="sin", width=:auto, height=10),
-     lineplot(x, cos.(x); title="cos", width=:auto, height=10)],
-    [lineplot(x, tan.(x); title="tan", width=:auto, height=:auto),
-     lineplot(x, -tan.(x); title="-tan", width=:auto, height=:auto)]
+    [lineplot(x, sin.(x); title="sin", height=10),
+     lineplot(x, cos.(x); title="cos", height=10)],
+    [lineplot(x, tan.(x); title="tan", height=:auto),
+     lineplot(x, -tan.(x); title="-tan", height=:auto)] # If one row has height=:auto the layout will make use of the entire terminal height
 ]
 ```
 
 ### Animated Plots
 
 ```julia
-live_plot = LivePlot()
-x_vals = Float64[]
-y_vals = Float64[]
+function plot_sincos()
+    live_plot = LivePlot()
+    x_vals = Float64[]
 
-for i in 1:100
-    push!(x_vals, i * 0.1)
-    push!(y_vals, sin(i * 0.1))
+    for i in 1:100
+        push!(x_vals, i * 0.1)
 
-    @live_layout live_plot [
-        lineplot(x_vals, y_vals; title="sin(x)", width=:auto),
-        lineplot(x_vals, cos.(x_vals); title="cos(x)", width=:auto)
-    ]
+        @live_layout live_plot [
+            lineplot(x_vals, sin.(x_vals); title="sin(x)", xlim = (0, 10), ylim = (-1, 1)),
+            lineplot(x_vals, cos.(x_vals); title="cos(x)", xlim = (0, 10), ylim = (-1, 1))
+        ]
 
-    sleep(0.05)
+        sleep(0.05)
+    end
 end
+plot_sincos()
 ```
 
 ## Documentation
@@ -92,7 +95,7 @@ live_plot = LivePlot()
 ### Width and Height Negotiation
 
 - Use `width=:auto` (or omit the `width` parameter entirely) for automatic width calculation based on terminal size
-- Use `height=:auto` (or omit the `height` parameter entirely) for automatic height calculation in grid layouts
+- Use `height=:auto` for automatic height calculation in grid layouts
 - Fixed dimensions are respected and remaining space is distributed to automatically sized plots
 - Overhead (borders, labels) is automatically accounted for
 
