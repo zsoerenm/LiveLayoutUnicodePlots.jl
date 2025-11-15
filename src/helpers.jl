@@ -247,3 +247,50 @@ function replace_auto_height(expr, height_var)
 
     return Expr(:call, new_args...)
 end
+
+"""
+    compute_plot_signature(plot)::UInt64
+
+Compute a hash signature for a plot based on characteristics that affect overhead:
+- Plot type (graphics type)
+- Decorations (axis limits, corner labels)
+- Title presence and content
+- X/Y axis labels
+
+Used for cache invalidation in LivePlot to detect when overhead may have changed.
+
+# Examples
+```julia
+p1 = lineplot(1:5, 1:5; title="Test")
+p2 = lineplot(1:5, 1:5; title="Test")
+sig1 = compute_plot_signature(p1)
+sig2 = compute_plot_signature(p2)
+@assert sig1 == sig2  # Same characteristics = same signature
+
+p3 = lineplot(1:5, 1:5; title="Different")
+sig3 = compute_plot_signature(p3)
+@assert sig1 != sig3  # Different title = different signature
+```
+"""
+function compute_plot_signature(plot)::UInt64
+    # Start with graphics type (BrailleCanvas vs TextGraphics vs BarplotGraphics, etc.)
+    h = hash(typeof(plot.graphics))
+
+    # Include decoration information (axis limits stored as corner labels)
+    if hasfield(typeof(plot), :decorations)
+        h = hash(plot.decorations, h)
+    end
+
+    # For UnicodePlots: title, xlabel, ylabel are stored as RefValue{String}
+    if hasfield(typeof(plot), :title)
+        h = hash(plot.title[], h)  # Extract value from RefValue
+    end
+    if hasfield(typeof(plot), :xlabel)
+        h = hash(plot.xlabel[], h)
+    end
+    if hasfield(typeof(plot), :ylabel)
+        h = hash(plot.ylabel[], h)
+    end
+
+    return h
+end
