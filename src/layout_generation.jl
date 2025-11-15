@@ -65,7 +65,7 @@ function _generate_layout_code(plot_exprs, num_plots, live_plot_expr)
     # Extract width info and create temporary plots for overhead calculation
     width_exprs = []
     temp_exprs = []
-    sig_exprs = []
+    sig_hash_exprs = []  # Direct parameter hashing instead of creating plots
     auto_width_count = 0
 
     for expr in plot_exprs
@@ -91,15 +91,9 @@ function _generate_layout_code(plot_exprs, num_plots, live_plot_expr)
         end
         push!(temp_exprs, new_expr)
 
-        # Create signature plot with width=10 but KEEP title and decorations
-        sig_expr = if isnothing(width_val)
-            add_width_param(expr, 10)
-        elseif width_val == QuoteNode(:auto) || width_val == :(:auto)
-            replace_auto_width(expr, 10)
-        else
-            add_width_param(expr, 10)
-        end
-        push!(sig_exprs, sig_expr)
+        # Extract signature parameters and generate hash expression (no plot creation!)
+        # This hashes the parameter values directly: hash((plot_fn, title, xlabel, ylabel, xlim, ylim))
+        push!(sig_hash_exprs, extract_signature_params(expr))
     end
 
     # Process each plot expression for final creation with negotiated width
@@ -169,8 +163,8 @@ function _generate_layout_code(plot_exprs, num_plots, live_plot_expr)
 
                 _w = if length(lp.cached_widths) < 1
                     # First time - calculate, cache width AND signatures
-                    sig_plots = [$(sig_exprs...)]
-                    signatures = [LiveLayoutUnicodePlots.compute_plot_signature(p) for p in sig_plots]
+                    # Compute signatures by hashing parameters directly (no plot creation!)
+                    signatures = [$(sig_hash_exprs...)]
                     calculated_w = $width_calc_expr
 
                     push!(lp.cached_widths, calculated_w)
@@ -178,8 +172,8 @@ function _generate_layout_code(plot_exprs, num_plots, live_plot_expr)
                     calculated_w
                 else
                     # Check if plot signatures have changed
-                    sig_plots = [$(sig_exprs...)]
-                    current_signatures = [LiveLayoutUnicodePlots.compute_plot_signature(p) for p in sig_plots]
+                    # Compute signatures by hashing parameters directly (no plot creation!)
+                    current_signatures = [$(sig_hash_exprs...)]
 
                     if current_signatures != lp.cached_signatures[1]
                         # Signatures changed - recalculate
@@ -235,6 +229,7 @@ function _generate_grid_layout_code(row_exprs, live_plot_expr)
         # Process each plot in the row for width negotiation (horizontal)
         width_exprs = []
         temp_exprs = []
+        sig_hash_exprs = []  # Direct parameter hashing instead of creating plots
         auto_width_count = 0
 
         for expr in plot_exprs
@@ -256,6 +251,9 @@ function _generate_grid_layout_code(row_exprs, live_plot_expr)
                 add_width_param(remove_title(expr), 10)
             end
             push!(temp_exprs, new_expr)
+
+            # Extract signature parameters and generate hash expression (no plot creation!)
+            push!(sig_hash_exprs, extract_signature_params(expr))
         end
 
         # Extract height info and title info for this row (check all plots in the row)
@@ -343,8 +341,8 @@ function _generate_grid_layout_code(row_exprs, live_plot_expr)
 
                     $(Symbol("_w_row_$(row_idx)")) = if length(lp.cached_widths) < $row_idx
                         # First time for this row - calculate and cache
-                        temp_plots = [$(temp_exprs...)]
-                        signatures = [LiveLayoutUnicodePlots.compute_plot_signature(p) for p in temp_plots]
+                        # Compute signatures by hashing parameters directly (no plot creation!)
+                        signatures = [$(sig_hash_exprs...)]
                         calculated_w = $width_calc_expr
 
                         push!(lp.cached_widths, calculated_w)
@@ -352,8 +350,8 @@ function _generate_grid_layout_code(row_exprs, live_plot_expr)
                         calculated_w
                     else
                         # Check signatures for this row
-                        temp_plots = [$(temp_exprs...)]
-                        current_signatures = [LiveLayoutUnicodePlots.compute_plot_signature(p) for p in temp_plots]
+                        # Compute signatures by hashing parameters directly (no plot creation!)
+                        current_signatures = [$(sig_hash_exprs...)]
 
                         if current_signatures != lp.cached_signatures[$row_idx]
                             # Recalculate

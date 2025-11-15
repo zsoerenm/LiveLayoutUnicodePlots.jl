@@ -249,6 +249,47 @@ function replace_auto_height(expr, height_var)
 end
 
 """
+    extract_signature_params(expr)
+
+Extract signature-affecting parameters from a plot expression at macro time.
+Returns an expression that will compute a hash tuple of (plot_function, title, xlabel, ylabel, xlim, ylim)
+at runtime.
+
+This avoids creating temporary plots just to compute signatures - we hash the parameter values directly.
+
+# Examples
+```julia
+expr = :(lineplot(x, y; title="Test", xlim=(0, 1)))
+sig_expr = extract_signature_params(expr)
+# Returns: :(hash((Symbol("lineplot"), "Test", nothing, nothing, (0, 1), nothing)))
+```
+"""
+function extract_signature_params(expr)
+    # Extract the plot function name
+    plot_fn = if expr isa Expr && expr.head == :call
+        if expr.args[1] isa Symbol
+            QuoteNode(expr.args[1])
+        else
+            # Handle namespaced functions like UnicodePlots.lineplot
+            QuoteNode(expr.args[1])
+        end
+    else
+        QuoteNode(:unknown)
+    end
+
+    # Extract signature-affecting parameters
+    title = extract_kwarg_value(expr, :title, nothing)
+    xlabel = extract_kwarg_value(expr, :xlabel, nothing)
+    ylabel = extract_kwarg_value(expr, :ylabel, nothing)
+    xlim = extract_kwarg_value(expr, :xlim, nothing)
+    ylim = extract_kwarg_value(expr, :ylim, nothing)
+
+    # Generate expression to hash these values at runtime
+    # Note: We use the actual values (which may be variables) so they're evaluated at runtime
+    return :(hash(($(plot_fn), $(title), $(xlabel), $(ylabel), $(xlim), $(ylim))))
+end
+
+"""
     compute_plot_signature(plot)::UInt64
 
 Compute a hash signature for a plot based on characteristics that affect overhead:
