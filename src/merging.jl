@@ -1,16 +1,15 @@
 # Functions for merging plots horizontally and vertically
 
 """
-    merge_plots_horizontal(plots::Vector; truncate_to_terminal::Bool=false)
+    merge_plots_horizontal(plots::Vector)
 
 Merge multiple plots horizontally by combining their string representations line by line.
 Similar to how Plots.jl handles subplot layouts with UnicodePlots backend.
 
 # Arguments
 - `plots`: Vector of plot objects to merge
-- `truncate_to_terminal`: If true, truncate lines that exceed terminal width (useful for cached layouts)
 """
-function merge_plots_horizontal(plots::Vector; truncate_to_terminal::Bool=false)
+function merge_plots_horizontal(plots::Vector)
     # Convert each plot to string and split into lines
     plot_lines = map(plots) do p
         io = IOBuffer()
@@ -45,19 +44,6 @@ function merge_plots_horizontal(plots::Vector; truncate_to_terminal::Bool=false)
         push!(merged_lines, join(line_parts, "  "))  # Add 2 spaces between plots
     end
 
-    # Truncate if requested and necessary
-    if truncate_to_terminal
-        term_width = displaysize(stdout)[2]
-        merged_lines = map(merged_lines) do line
-            display_length = length(strip_ansi(line))
-            if display_length > term_width
-                truncate_line_preserving_ansi(line, term_width)
-            else
-                line
-            end
-        end
-    end
-
     return join(merged_lines, '\n')
 end
 
@@ -71,42 +57,4 @@ Merge plot rows vertically by joining them with newlines.
 """
 function merge_plots_vertical(rows::Vector{String})
     return join(rows, '\n')
-end
-
-"""
-    truncate_line_preserving_ansi(line::String, max_width::Int)
-
-Truncate a line to max_width display characters while preserving ANSI color codes.
-"""
-function truncate_line_preserving_ansi(line::String, max_width::Int)
-    # Parse ANSI codes and text segments
-    ansi_pattern = r"\e\[[0-9;]*m"
-
-    result = IOBuffer()
-    display_count = 0
-    pos = 1
-
-    while pos <= lastindex(line) && display_count < max_width
-        # Check for ANSI code at current position
-        m = match(ansi_pattern, SubString(line, pos))
-        if !isnothing(m) && m.offset == 1
-            # Write ANSI code (doesn't count toward display width)
-            write(result, m.match)
-            pos += length(m.match)
-        else
-            # Regular character - write it and advance position correctly
-            if display_count < max_width
-                write(result, line[pos])
-                display_count += 1
-            end
-            pos = nextind(line, pos)
-        end
-    end
-
-    # Add reset code if we truncated
-    if display_count == max_width && pos <= lastindex(line)
-        write(result, "\e[0m")
-    end
-
-    return String(take!(result))
 end

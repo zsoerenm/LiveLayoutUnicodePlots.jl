@@ -17,18 +17,11 @@ Base.String(lr::LayoutResult) = lr.content
 """
     LivePlot
 
-A mutable struct for managing in-place plot updates in the terminal with automatic
-width caching for performance.
+A mutable struct for managing in-place plot updates in the terminal.
 
 # Fields
 - `num_lines::Int`: Number of lines in the last rendered plot (tracked automatically)
 - `first_iteration::Bool`: Whether this is the first render (tracked automatically)
-- `cached_widths::Vector{Int}`: Cached width calculations per row for performance (tracked automatically)
-- `cached_signatures::Vector{Vector{UInt64}}`: Cached plot signatures for cache invalidation (tracked automatically)
-
-For horizontal layouts, only the first element is used.
-For grid layouts, each row has its own cached width and signatures at the corresponding index.
-Each signature vector contains one hash per plot in that row.
 
 # Example
 ```julia
@@ -50,10 +43,8 @@ end
 mutable struct LivePlot
     num_lines::Int
     first_iteration::Bool
-    cached_widths::Vector{Int}
-    cached_signatures::Vector{Vector{UInt64}}
 
-    LivePlot() = new(0, true, Int[], Vector{UInt64}[])
+    LivePlot() = new(0, true)
 end
 
 """

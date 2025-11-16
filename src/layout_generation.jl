@@ -47,7 +47,7 @@ function _calculate_overheads(temp_plots, num_plots)
 end
 
 """
-    _generate_layout_code(plot_exprs, num_plots, live_plot_expr)
+    _generate_layout_code(plot_exprs, num_plots)
 
 Generate code for horizontal layout with automatic width negotiation.
 This function creates expressions that will be executed at runtime to:
@@ -59,13 +59,11 @@ This function creates expressions that will be executed at runtime to:
 # Arguments
 - `plot_exprs`: Vector of plot expressions from the macro
 - `num_plots`: Number of plots in the layout
-- `live_plot_expr`: Optional LivePlot instance for caching (nothing for static layouts)
 """
-function _generate_layout_code(plot_exprs, num_plots, live_plot_expr)
+function _generate_layout_code(plot_exprs, num_plots)
     # Extract width info and create temporary plots for overhead calculation
     width_exprs = []
     temp_exprs = []
-    sig_hash_exprs = []  # Direct parameter hashing instead of creating plots
     auto_width_count = 0
 
     for expr in plot_exprs
@@ -90,10 +88,6 @@ function _generate_layout_code(plot_exprs, num_plots, live_plot_expr)
             add_width_param(remove_title(expr), 10)
         end
         push!(temp_exprs, new_expr)
-
-        # Extract signature parameters and generate hash expression (no plot creation!)
-        # This hashes the parameter values directly: hash((plot_fn, title, xlabel, ylabel, xlim, ylim))
-        push!(sig_hash_exprs, extract_signature_params(expr))
     end
 
     # Process each plot expression for final creation with negotiated width
@@ -140,65 +134,21 @@ function _generate_layout_code(plot_exprs, num_plots, live_plot_expr)
         :($(auto_width_count) > 0 ? Int(max(div(available, $(auto_width_count)), 5)) : 0)
     )
 
-    # Generate the runtime code
-    if isnothing(live_plot_expr)
-        # No caching - always calculate width
-        return quote
-            let term_width = displaysize(stdout)[2],
-                widths = [$(width_exprs...)],
-                padding_between = 2 * ($num_plots - 1)
+    # Generate the runtime code (always calculate width - no caching)
+    return quote
+        let term_width = displaysize(stdout)[2],
+            widths = [$(width_exprs...)],
+            padding_between = 2 * ($num_plots - 1)
 
-                _w = $width_calc_expr
+            _w = $width_calc_expr
 
-                LiveLayoutUnicodePlots.LayoutResult(LiveLayoutUnicodePlots.merge_plots_horizontal([$(final_exprs...)]))
-            end
-        end
-    else
-        # With LivePlot caching - check cache first, calculate and cache if needed
-        return quote
-            let lp = $(live_plot_expr),
-                term_width = displaysize(stdout)[2],
-                widths = [$(width_exprs...)],
-                padding_between = 2 * ($num_plots - 1)
-
-                _w = if length(lp.cached_widths) < 1
-                    # First time - calculate, cache width AND signatures
-                    # Compute signatures by hashing parameters directly (no plot creation!)
-                    signatures = [$(sig_hash_exprs...)]
-                    calculated_w = $width_calc_expr
-
-                    push!(lp.cached_widths, calculated_w)
-                    push!(lp.cached_signatures, signatures)
-                    calculated_w
-                else
-                    # Check if plot signatures have changed
-                    # Compute signatures by hashing parameters directly (no plot creation!)
-                    current_signatures = [$(sig_hash_exprs...)]
-
-                    if current_signatures != lp.cached_signatures[1]
-                        # Signatures changed - recalculate
-                        calculated_w = $width_calc_expr
-                        lp.cached_widths[1] = calculated_w
-                        lp.cached_signatures[1] = current_signatures
-                        calculated_w
-                    else
-                        # Cache still valid
-                        lp.cached_widths[1]
-                    end
-                end
-
-                # Use truncation when cached to prevent overflow if data changes
-                LiveLayoutUnicodePlots.LayoutResult(LiveLayoutUnicodePlots.merge_plots_horizontal(
-                    [$(final_exprs...)];
-                    truncate_to_terminal = length(lp.cached_widths) >= 1
-                ))
-            end
+            LiveLayoutUnicodePlots.LayoutResult(LiveLayoutUnicodePlots.merge_plots_horizontal([$(final_exprs...)]))
         end
     end
 end
 
 """
-    _generate_grid_layout_code(row_exprs, live_plot_expr)
+    _generate_grid_layout_code(row_exprs)
 
 Generate code for grid layout (Vector of Vectors) with automatic width and height negotiation.
 This function creates expressions that will be executed at runtime to:
@@ -209,9 +159,8 @@ This function creates expressions that will be executed at runtime to:
 
 # Arguments
 - `row_exprs`: Vector of Vectors of plot expressions (each inner vector is a row)
-- `live_plot_expr`: Optional LivePlot instance for caching (nothing for static layouts)
 """
-function _generate_grid_layout_code(row_exprs, live_plot_expr)
+function _generate_grid_layout_code(row_exprs)
     # row_exprs is a Vector of Vectors - each inner vector is a row of plots
     num_rows = length(row_exprs)
 
@@ -229,7 +178,6 @@ function _generate_grid_layout_code(row_exprs, live_plot_expr)
         # Process each plot in the row for width negotiation (horizontal)
         width_exprs = []
         temp_exprs = []
-        sig_hash_exprs = []  # Direct parameter hashing instead of creating plots
         auto_width_count = 0
 
         for expr in plot_exprs
@@ -251,9 +199,6 @@ function _generate_grid_layout_code(row_exprs, live_plot_expr)
                 add_width_param(remove_title(expr), 10)
             end
             push!(temp_exprs, new_expr)
-
-            # Extract signature parameters and generate hash expression (no plot creation!)
-            push!(sig_hash_exprs, extract_signature_params(expr))
         end
 
         # Extract height info and title info for this row (check all plots in the row)
@@ -317,56 +262,16 @@ function _generate_grid_layout_code(row_exprs, live_plot_expr)
             :($(auto_width_count) > 0 ? Int(max(div(available, $(auto_width_count)), 5)) : 0)
         )
 
-        # Generate row code with caching support
-        row_code = if isnothing(live_plot_expr)
-            # No caching
-            quote
-                let widths = [$(width_exprs...)],
-                    padding_between = 2 * ($num_plots_in_row - 1),
-                    term_width = displaysize(stdout)[2]
+        # Generate row code (always calculate width - no caching)
+        row_code = quote
+            let widths = [$(width_exprs...)],
+                padding_between = 2 * ($num_plots_in_row - 1),
+                term_width = displaysize(stdout)[2]
 
-                    $(Symbol("_w_row_$(row_idx)")) = $width_calc_expr
+                $(Symbol("_w_row_$(row_idx)")) = $width_calc_expr
 
-                    # Merge plots horizontally for this row
-                    LiveLayoutUnicodePlots.merge_plots_horizontal([$(final_exprs...)])
-                end
-            end
-        else
-            # With caching
-            quote
-                let widths = [$(width_exprs...)],
-                    padding_between = 2 * ($num_plots_in_row - 1),
-                    term_width = displaysize(stdout)[2],
-                    lp = $(live_plot_expr)
-
-                    $(Symbol("_w_row_$(row_idx)")) = if length(lp.cached_widths) < $row_idx
-                        # First time for this row - calculate and cache
-                        # Compute signatures by hashing parameters directly (no plot creation!)
-                        signatures = [$(sig_hash_exprs...)]
-                        calculated_w = $width_calc_expr
-
-                        push!(lp.cached_widths, calculated_w)
-                        push!(lp.cached_signatures, signatures)
-                        calculated_w
-                    else
-                        # Check signatures for this row
-                        # Compute signatures by hashing parameters directly (no plot creation!)
-                        current_signatures = [$(sig_hash_exprs...)]
-
-                        if current_signatures != lp.cached_signatures[$row_idx]
-                            # Recalculate
-                            calculated_w = $width_calc_expr
-                            lp.cached_widths[$row_idx] = calculated_w
-                            lp.cached_signatures[$row_idx] = current_signatures
-                            calculated_w
-                        else
-                            lp.cached_widths[$row_idx]
-                        end
-                    end
-
-                    # Merge plots horizontally for this row
-                    LiveLayoutUnicodePlots.merge_plots_horizontal([$(final_exprs...)])
-                end
+                # Merge plots horizontally for this row
+                LiveLayoutUnicodePlots.merge_plots_horizontal([$(final_exprs...)])
             end
         end
 
@@ -447,29 +352,7 @@ function _generate_grid_layout_code(row_exprs, live_plot_expr)
             # Merge rows vertically
             result = LiveLayoutUnicodePlots.merge_plots_vertical(rows)
 
-            $(if isnothing(live_plot_expr)
-                :(LiveLayoutUnicodePlots.LayoutResult(result))
-            else
-                quote
-                    # Use truncation when cached
-                    if length($(live_plot_expr).cached_widths) >= $num_rows
-                        # Apply truncation
-                        term_width = displaysize(stdout)[2]
-                        strip_ansi = (s::AbstractString) -> replace(s, r"\e\[[0-9;]*m" => "")
-                        result_lines = split(result, '\n')
-                        result_lines = map(result_lines) do line
-                            display_length = length(strip_ansi(line))
-                            if display_length > term_width
-                                LiveLayoutUnicodePlots.truncate_line_preserving_ansi(line, term_width)
-                            else
-                                line
-                            end
-                        end
-                        result = join(result_lines, '\n')
-                    end
-                    LiveLayoutUnicodePlots.LayoutResult(result)
-                end
-            end)
+            LiveLayoutUnicodePlots.LayoutResult(result)
         end
     end
 
