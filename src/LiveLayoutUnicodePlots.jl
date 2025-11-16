@@ -2,7 +2,7 @@ module LiveLayoutUnicodePlots
 
 using UnicodePlots
 
-export merge_plots_horizontal, merge_plots_vertical, LivePlot, @layout, @live_layout, textplot
+export merge_plots_horizontal, merge_plots_vertical, LivePlot, @layout, textplot
 
 # Include submodules in dependency order
 include("types.jl")
