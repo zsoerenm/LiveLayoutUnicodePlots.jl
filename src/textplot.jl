@@ -207,7 +207,8 @@ function textplot(content::AbstractString;
                   height=:auto,
                   title::AbstractString="",
                   border::Symbol=:solid,
-                  wrap::Bool=true)
+                  wrap::Bool=true,
+                  color::Bool=true)  # Accept but ignore color parameter for compatibility
     # Process content to get lines
     # For auto sizing, we need to process first to determine dimensions
 

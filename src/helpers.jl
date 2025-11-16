@@ -249,6 +249,39 @@ function replace_auto_height(expr, height_var)
 end
 
 """
+    add_color_param(expr, color_value::Bool)
+
+Add a color parameter to a plot expression (only if not already present).
+Used to disable color in temporary plots for overhead calculation (2.7x faster).
+"""
+function add_color_param(expr, color_value::Bool)
+    if !(expr isa Expr) || expr.head != :call
+        return expr
+    end
+
+    # Check if color is already present
+    if !isnothing(extract_kwarg_value(expr, :color, nothing))
+        return expr
+    end
+
+    # Add color parameter
+    new_args = copy(expr.args)
+
+    # Check if there's a :parameters node
+    if length(new_args) >= 2 && new_args[2] isa Expr && new_args[2].head == :parameters
+        # Add to existing parameters node
+        new_params = copy(new_args[2].args)
+        push!(new_params, Expr(:kw, :color, color_value))
+        new_args[2] = Expr(:parameters, new_params...)
+    else
+        # Create new parameters node
+        insert!(new_args, 2, Expr(:parameters, Expr(:kw, :color, color_value)))
+    end
+
+    return Expr(:call, new_args...)
+end
+
+"""
     extract_signature_params(expr)
 
 Extract signature-affecting parameters from a plot expression at macro time.
